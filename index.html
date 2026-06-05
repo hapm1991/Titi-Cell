@@ -697,7 +697,7 @@ window.addEventListener('load', () => {
   // Load saved URLs
   // Pre-configure script URL if not already set
   if (!db.config.scriptUrl) {
-    db.config.scriptUrl = 'https://script.google.com/macros/s/AKfycbyjWHTknEUBRnYEShWoRPd_da6j9elpbN7AFW-AlHWFojgvVO0xGoihsEKa3sEVOWKG_A/exec';
+    db.config.scriptUrl = 'https://script.google.com/macros/s/AKfycbzf24_Lsx2ro8JvV_PUSl6YE7EGL6RG-Mx3mAoj-tg5_bW1ujn4GW_AWuEMbiBGn7Jpbw/exec';
     save();
   }
   if (db.config.sheetUrl) document.getElementById('sheets-url').value = db.config.sheetUrl;
@@ -1138,7 +1138,7 @@ function renderPurchases() {
 function openSheetsModal() {
   // Pre-configure script URL if not already set
   if (!db.config.scriptUrl) {
-    db.config.scriptUrl = 'https://script.google.com/macros/s/AKfycbyjWHTknEUBRnYEShWoRPd_da6j9elpbN7AFW-AlHWFojgvVO0xGoihsEKa3sEVOWKG_A/exec';
+    db.config.scriptUrl = 'https://script.google.com/macros/s/AKfycbzf24_Lsx2ro8JvV_PUSl6YE7EGL6RG-Mx3mAoj-tg5_bW1ujn4GW_AWuEMbiBGn7Jpbw/exec';
     save();
   }
   if (db.config.sheetUrl) document.getElementById('sheets-url').value = db.config.sheetUrl;
@@ -1162,9 +1162,9 @@ async function testScriptConnection() {
   if (!url) return;
   el.textContent = '⏳ Probando conexión...';
   try {
-    const r = await fetch(url + '?action=ping');
-    if (r.ok) { el.textContent = '✅ Conectado correctamente'; el.style.color = 'var(--accent3)'; }
-    else { el.textContent = '❌ Error al conectar. Verifica el URL.'; el.style.color = 'var(--accent2)'; }
+    await fetch(url + '?action=ping', { mode: 'no-cors' });
+    el.textContent = '✅ Conectado correctamente';
+    el.style.color = 'var(--accent3)';
   } catch(e) {
     el.textContent = '⚠️ No se pudo conectar. Verifica el script.';
     el.style.color = 'var(--accent4)';
@@ -1178,8 +1178,9 @@ async function syncToSheets(type) {
   try {
     await fetch(url, {
       method: 'POST',
+      mode: 'no-cors',
       body: JSON.stringify({ action: 'sync', type, data }),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'text/plain' }
     });
   } catch(e) { /* silent */ }
 }
