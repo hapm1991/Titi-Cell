@@ -695,8 +695,13 @@ window.addEventListener('load', () => {
     }, 500);
   }, 1400);
   // Load saved URLs
+  // Pre-configure script URL if not already set
+  if (!db.config.scriptUrl) {
+    db.config.scriptUrl = 'https://script.google.com/macros/s/AKfycbyjWHTknEUBRnYEShWoRPd_da6j9elpbN7AFW-AlHWFojgvVO0xGoihsEKa3sEVOWKG_A/exec';
+    save();
+  }
   if (db.config.sheetUrl) document.getElementById('sheets-url').value = db.config.sheetUrl;
-  if (db.config.scriptUrl) document.getElementById('script-url').value = db.config.scriptUrl;
+  document.getElementById('script-url').value = db.config.scriptUrl;
 });
 
 function refreshAll() {
@@ -1131,8 +1136,13 @@ function renderPurchases() {
 
 // ===================== SHEETS =====================
 function openSheetsModal() {
+  // Pre-configure script URL if not already set
+  if (!db.config.scriptUrl) {
+    db.config.scriptUrl = 'https://script.google.com/macros/s/AKfycbyjWHTknEUBRnYEShWoRPd_da6j9elpbN7AFW-AlHWFojgvVO0xGoihsEKa3sEVOWKG_A/exec';
+    save();
+  }
   if (db.config.sheetUrl) document.getElementById('sheets-url').value = db.config.sheetUrl;
-  if (db.config.scriptUrl) document.getElementById('script-url').value = db.config.scriptUrl;
+  document.getElementById('script-url').value = db.config.scriptUrl;
   openModal('modal-sheets');
 }
 
