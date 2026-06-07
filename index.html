@@ -406,8 +406,8 @@
           <input type="text" placeholder="Buscar equipo..." id="inv-search" oninput="renderInventory()">
         </div>
         <div class="tabs">
-          <div class="tab active" onclick="filterInventory('todos',this)">Todos</div>
-          <div class="tab" onclick="filterInventory('disponible',this)">Disponibles</div>
+          <div class="tab" onclick="filterInventory('todos',this)">Todos</div>
+          <div class="tab active" onclick="filterInventory('disponible',this)">Disponibles</div>
           <div class="tab" onclick="filterInventory('vendido',this)">Vendidos</div>
         </div>
         <div id="inventory-list"></div>
@@ -821,7 +821,7 @@ let db = JSON.parse(localStorage.getItem(DB_KEY) || '{"products":[],"sales":[],"
 const save = () => localStorage.setItem(DB_KEY, JSON.stringify(db));
 
 // State
-let invFilter = 'todos', salesFilter = 'todas';
+let invFilter = 'disponible', salesFilter = 'todas';
 let pCurrency = 'C$', sCurrency = 'C$', puCurrency = 'C$';
 let currentSaleId = null, currentProductId = null;
 
@@ -891,6 +891,11 @@ function setPUCur(c) {
 }
 const fmt = (v, c) => `${c} ${parseFloat(v||0).toLocaleString('es-NI', {minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
+// Helper: get product data for a sale (live or snapshot)
+function getProductForSale(s) {
+  return db.products.find(x => x.id === s.productId) || s.productSnapshot || null;
+}
+
 // ===================== DASHBOARD =====================
 function renderDashboard() {
   const total = db.products.length;
@@ -930,11 +935,11 @@ function renderDashboard() {
   const rEl = document.getElementById('recent-sales-list');
   if (!recent.length) { rEl.innerHTML = '<div class="empty"><div class="empty-icon">🛒</div><p>No hay ventas aún</p></div>'; return; }
   rEl.innerHTML = recent.map(s => {
-    const p = db.products.find(x => x.id === s.productId);
+    const p = getProductForSale(s);
     return `<div class="list-item" onclick="openSaleDetail('${s.id}')">
       <div class="item-icon" style="background:rgba(67,233,123,0.1)">📱</div>
       <div class="item-info">
-        <div class="item-name">${p ? p.brand+' '+p.model : 'Equipo eliminado'}</div>
+        <div class="item-name">${p ? p.brand+' '+p.model : '—'}</div>
         <div class="item-sub">${s.client||'Sin nombre'} · ${s.payment}${s.invoice?' · #'+s.invoice:''}</div>
       </div>
       <div class="item-right">
@@ -1055,6 +1060,15 @@ function openProductDetail(id) {
     <div class="detail-row"><span class="detail-key">Proveedor</span><span class="detail-val">${p.supplier||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Fecha entrada</span><span class="detail-val">${p.date?new Date(p.date).toLocaleDateString('es-NI'):'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Notas</span><span class="detail-val">${p.notes||'—'}</span></div>`;
+  // Hide delete button for sold items
+  const delBtn = document.querySelector('#modal-product-detail .btn[onclick="deleteProductConfirm()"]');
+  if (delBtn) {
+    if (p.status === 'vendido') {
+      delBtn.style.display = 'none';
+    } else {
+      delBtn.style.display = '';
+    }
+  }
   openModal('modal-product-detail');
 }
 
@@ -1079,10 +1093,17 @@ function editProductFromDetail() {
 }
 
 function deleteProductConfirm() {
+  const p = db.products.find(x => x.id === currentProductId);
+  if (!p) return;
+  if (p.status === 'vendido') {
+    toast('⚠️ No se puede eliminar un equipo ya vendido');
+    return;
+  }
   if (confirm('¿Eliminar este equipo del inventario?')) {
-    db.products = db.products.filter(p => p.id !== currentProductId);
+    db.products = db.products.filter(x => x.id !== currentProductId);
     save(); closeModal('modal-product-detail');
     toast('🗑 Equipo eliminado'); refreshAll();
+    syncToSheets('inventory');
   }
 }
 
@@ -1180,6 +1201,19 @@ function saveSale() {
     waNotified: false,
     cobrado: isCredit ? false : true
   };
+  // Snapshot product info into sale so it survives product deletion
+  const soldProduct = db.products.find(p => p.id === productId);
+  if (soldProduct) {
+    sale.productSnapshot = {
+      brand: soldProduct.brand,
+      model: soldProduct.model,
+      storage: soldProduct.storage || '',
+      color: soldProduct.color || '',
+      imei: soldProduct.imei || '',
+      cost: soldProduct.cost,
+      currency: soldProduct.currency
+    };
+  }
   db.sales.push(sale);
   const pIdx = db.products.findIndex(p => p.id === productId);
   if (pIdx >= 0) db.products[pIdx].status = 'vendido';
@@ -1203,9 +1237,9 @@ function renderSales() {
   const month = new Date().getMonth();
   const q = (document.getElementById('sales-search')?.value || '').toLowerCase();
   let sales = [...db.sales].reverse().filter(s => {
-    const p = db.products.find(x => x.id === s.productId);
+    const p = getProductForSale(s);
     const matchSearch = !q ||
-      s.client.toLowerCase().includes(q) ||
+      (s.client||'').toLowerCase().includes(q) ||
       (s.phone||'').includes(q) ||
       (p ? (p.brand+' '+p.model).toLowerCase().includes(q) : false) ||
       s.payment.toLowerCase().includes(q);
@@ -1217,12 +1251,12 @@ function renderSales() {
   const el = document.getElementById('sales-list');
   if (!sales.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">💳</div><p>No hay ventas</p></div>'; return; }
   el.innerHTML = sales.map(s => {
-    const p = db.products.find(x => x.id === s.productId);
+    const p = getProductForSale(s);
     const waIcon = s.waNotified ? '✅' : '💬';
     return `<div class="list-item" onclick="openSaleDetail('${s.id}')">
       <div class="item-icon" style="background:rgba(67,233,123,0.1)">📱</div>
       <div class="item-info">
-        <div class="item-name">${p ? p.brand+' '+p.model : 'Equipo eliminado'}</div>
+        <div class="item-name">${p ? p.brand+' '+p.model : '—'}</div>
         <div class="item-sub">${s.client||'Sin nombre'} · ${s.payment}${s.invoice?' · #'+s.invoice:''}</div>
       </div>
       <div class="item-right">
@@ -1238,11 +1272,11 @@ function openSaleDetail(id) {
   const s = db.sales.find(x => x.id === id);
   if (!s) return;
   currentSaleId = id;
-  const p = db.products.find(x => x.id === s.productId);
+  const p = getProductForSale(s);
   document.getElementById('sale-detail-content').innerHTML = `
     <div class="detail-row"><span class="detail-key">Equipo</span><span class="detail-val">${p ? p.brand+' '+p.model : 'Eliminado'}</span></div>
     ${p ? `<div class="detail-row"><span class="detail-key">IMEI/SN</span><span class="detail-val">${p.imei||'—'}</span></div>` : ''}
-    <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${s.client}</span></div>
+    <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${s.client||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Teléfono</span><span class="detail-val">${s.phone||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Forma de Pago</span><span class="detail-val">${s.payment}</span></div>
     <div class="detail-row"><span class="detail-key">Precio Vendido</span><span class="detail-val" style="color:var(--accent3)">${fmt(s.price, s.currency)}</span></div>
@@ -1268,7 +1302,7 @@ function openSaleDetail(id) {
 function sendWA() {
   const s = db.sales.find(x => x.id === currentSaleId);
   if (!s) return;
-  const p = db.products.find(x => x.id === s.productId);
+  const p = getProductForSale(s);
   const msg = `Hola! Le informo que se realizó una venta:\n\n📱 *Equipo:* ${p ? p.brand+' '+p.model : 'N/A'}${p&&p.storage?' ('+p.storage+')':''}${p&&p.color?' - '+p.color:''}\n💰 *Precio:* ${p ? fmt(p.cost, p.currency) : '—'}${p&&p.imei?'\n🔑 *IMEI/SN:* '+p.imei:''}\n\nGracias! 🙏`;
   const url = `https://wa.me/50581108843?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
@@ -1380,6 +1414,7 @@ function openSheetsModal() {
   }
   if (db.config.sheetUrl) document.getElementById('sheets-url').value = db.config.sheetUrl;
   document.getElementById('script-url').value = db.config.scriptUrl;
+  document.getElementById('exchange-rate').value = getRate();
   openModal('modal-sheets');
 }
 
@@ -1825,12 +1860,7 @@ function restoreData(input) {
   reader.readAsText(file);
 }
 
-// Pre-load exchange rate field when sheets modal opens
-const _origOpenSheets = openSheetsModal;
-openSheetsModal = function() {
-  _origOpenSheets();
-  document.getElementById('exchange-rate').value = getRate();
-};
+// Exchange rate pre-loaded inside openSheetsModal directly
 </script>
 </body>
 </html>
