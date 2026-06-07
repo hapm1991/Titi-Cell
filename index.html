@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Titi Cell">
 <meta name="theme-color" content="#0a0a0f">
 <title>Titi Cell</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.19.1/zxing.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
 <style>
@@ -281,6 +282,52 @@
   .profit-neg { color: var(--accent2); }
 
   input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  /* SCANNER */
+  #scanner-modal {
+    position: fixed; inset: 0; background: #000;
+    z-index: 300; display: none; flex-direction: column;
+  }
+  #scanner-modal.open { display: flex; }
+  #scanner-video {
+    width: 100%; flex: 1; object-fit: cover;
+  }
+  #scanner-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  #scanner-frame {
+    width: 260px; height: 120px; border-radius: 12px;
+    border: 3px solid var(--accent); box-shadow: 0 0 0 4000px rgba(0,0,0,0.55);
+    position: relative;
+  }
+  #scanner-frame::before, #scanner-frame::after {
+    content: ''; position: absolute; width: 24px; height: 24px;
+    border-color: var(--accent3); border-style: solid;
+  }
+  #scanner-frame::before { top: -3px; left: -3px; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
+  #scanner-frame::after  { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
+  .scanner-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: var(--accent3); opacity: 0.8;
+    animation: scanline 2s ease-in-out infinite;
+  }
+  @keyframes scanline { 0%,100% { top: 10%; } 50% { top: 85%; } }
+  #scanner-hint {
+    color: white; font-size: 13px; margin-top: 20px;
+    text-align: center; letter-spacing: 0.3px; opacity: 0.85;
+  }
+  #scanner-result {
+    background: var(--accent3); color: #0a2015;
+    font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700;
+    padding: 12px 20px; border-radius: 12px; margin-top: 14px;
+    display: none; pointer-events: auto;
+  }
+  #scanner-bottom {
+    padding: 20px; padding-bottom: calc(var(--safe-bottom) + 20px);
+    background: var(--bg); pointer-events: auto;
+  }
 </style>
 </head>
 <body>
@@ -301,6 +348,9 @@
     </div>
   </header>
 
+  <div id="sync-bar" style="display:none;background:rgba(67,233,123,0.12);border-bottom:1px solid rgba(67,233,123,0.25);padding:6px 16px;font-size:12px;color:#4ecb7e;align-items:center;gap:8px;">
+    <span>●</span><span id="sync-bar-msg">Sincronizando...</span>
+  </div>
   <div id="content">
     <!-- DASHBOARD -->
     <div class="page active" id="page-home">
@@ -318,13 +368,13 @@
           </div>
           <div class="stat-card s3">
             <div class="stat-icon">💰</div>
-            <div class="stat-label">Ventas Hoy</div>
-            <div class="stat-value" id="stat-sales-today">0</div>
+            <div class="stat-label">Ganancia Mes</div>
+            <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;line-height:1.2" id="stat-profit-month">—</div>
           </div>
           <div class="stat-card s4">
-            <div class="stat-icon">📈</div>
-            <div class="stat-label">Ventas Mes</div>
-            <div class="stat-value" id="stat-sales-month">0</div>
+            <div class="stat-icon">🏦</div>
+            <div class="stat-label">Capital Invertido</div>
+            <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;line-height:1.2" id="stat-capital">—</div>
           </div>
         </div>
 
@@ -371,6 +421,10 @@
           Ventas
           <button class="btn btn-success btn-sm" onclick="openNewSale()">+ Nueva</button>
         </div>
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Buscar cliente o equipo..." id="sales-search" oninput="renderSales()">
+        </div>
         <div class="tabs">
           <div class="tab active" onclick="filterSales('todas',this)">Todas</div>
           <div class="tab" onclick="filterSales('hoy',this)">Hoy</div>
@@ -387,7 +441,33 @@
           Compras / Entradas
           <button class="btn btn-primary btn-sm" onclick="openAddPurchase()">+ Nueva</button>
         </div>
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Buscar compra..." id="purchases-search" oninput="renderPurchases()">
+        </div>
         <div id="purchases-list"></div>
+      </div>
+    </div>
+
+    <!-- REPORTES -->
+    <div class="page" id="page-reports">
+      <div style="padding:16px">
+        <div class="section-title">Reportes</div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">Periodo</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Desde</label>
+              <input class="form-input" type="date" id="rep-from">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hasta</label>
+              <input class="form-input" type="date" id="rep-to">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateReport()">📊 Generar Reporte</button>
+        </div>
+        <div id="report-result"></div>
       </div>
     </div>
   </div>
@@ -409,11 +489,30 @@
       <div class="nav-icon">🛒</div>
       <div class="nav-label">Compras</div>
     </div>
+    <div class="nav-item" onclick="goTo('reports',this)">
+      <div class="nav-icon">📈</div>
+      <div class="nav-label">Reportes</div>
+    </div>
   </nav>
 </div>
 
 <!-- TOAST -->
 <div id="toast"></div>
+
+<!-- SCANNER MODAL -->
+<div id="scanner-modal">
+  <video id="scanner-video" autoplay playsinline muted></video>
+  <div id="scanner-overlay">
+    <div id="scanner-frame">
+      <div class="scanner-line"></div>
+    </div>
+    <div id="scanner-hint">Apunta al código de barras del IMEI</div>
+    <div id="scanner-result"></div>
+  </div>
+  <div id="scanner-bottom">
+    <button class="btn btn-ghost" onclick="closeScanner()" style="margin-bottom:0">✕ Cancelar</button>
+  </div>
+</div>
 
 <!-- ===================== MODALS ===================== -->
 
@@ -425,7 +524,8 @@
     <input type="hidden" id="product-id">
     <div class="form-group">
       <label class="form-label">Marca</label>
-      <input class="form-input" id="p-brand" placeholder="Ej: Samsung, iPhone...">
+      <input class="form-input" id="p-brand" list="brand-list" placeholder="Seleccionar o escribir marca..." autocomplete="off">
+      <datalist id="brand-list"></datalist>
     </div>
     <div class="form-group">
       <label class="form-label">Modelo</label>
@@ -442,8 +542,11 @@
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">IMEI / Serie</label>
-      <input class="form-input" id="p-imei" placeholder="Opcional">
+      <label class="form-label">IMEI / SN <span style="font-weight:400;color:var(--text2)">(Opcional)</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input" id="p-imei" placeholder="IMEI (15 dígitos) o SN" style="flex:1">
+        <button type="button" onclick="openScanner('p-imei')" style="width:46px;height:46px;border-radius:10px;background:var(--accent);border:none;font-size:22px;flex-shrink:0;cursor:pointer">📷</button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Moneda del Precio</label>
@@ -481,11 +584,22 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Nueva Venta</div>
     <div class="form-group">
-      <label class="form-label">Equipo</label>
-      <select class="form-select" id="s-product" onchange="onProductSelect()">
-        <option value="">Seleccionar equipo...</option>
+      <label class="form-label">Filtrar por Marca</label>
+      <select class="form-select" id="s-brand-filter" onchange="onBrandFilterChange()">
+        <option value="">Todas las marcas</option>
       </select>
     </div>
+    <div class="form-group">
+      <label class="form-label">Equipo</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="form-select" id="s-product" onchange="onProductSelect()" style="flex:1">
+          <option value="">Seleccionar equipo...</option>
+        </select>
+        <button type="button" onclick="openScanner('sale-imei-scan')" title="Escanear IMEI/SN" style="width:46px;height:46px;border-radius:10px;background:var(--accent);border:none;font-size:22px;flex-shrink:0;cursor:pointer">📷</button>
+      </div>
+      <div id="sale-scan-hint" style="display:none;font-size:11px;color:var(--accent);margin-top:5px">📷 Apunta al código IMEI/SN del equipo para seleccionarlo automáticamente</div>
+    </div>
+    <input type="hidden" id="sale-imei-scan">
     <div id="s-product-info" style="display:none;margin-bottom:14px">
       <div class="list-item" style="margin:0">
         <div class="item-icon" style="background:rgba(108,99,255,0.1)">📱</div>
@@ -500,7 +614,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Cliente</label>
-      <input class="form-input" id="s-client" placeholder="Nombre del cliente">
+      <input class="form-input" id="s-client" placeholder="Nombre del cliente (opcional)">
     </div>
     <div class="form-group">
       <label class="form-label">Teléfono Cliente</label>
@@ -532,9 +646,13 @@
         <input class="form-input" type="number" id="s-price" placeholder="0.00">
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
-        <input class="form-input" id="s-notes" placeholder="Opcional">
+        <label class="form-label">N° Factura <span style="font-weight:400;color:var(--text2)">(Opcional)</span></label>
+        <input class="form-input" id="s-invoice" placeholder="Ej: 0001">
       </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas <span style="font-weight:400;color:var(--text2)">(Opcional)</span></label>
+      <input class="form-input" id="s-notes" placeholder="Observaciones...">
     </div>
     <button class="btn btn-success" onclick="saveSale()" style="margin-bottom:10px">✅ Registrar Venta</button>
     <button class="btn btn-ghost" onclick="closeModal('modal-sale')">Cancelar</button>
@@ -548,7 +666,7 @@
     <div class="modal-title">Nueva Entrada de Inventario</div>
     <div class="form-group">
       <label class="form-label">Marca</label>
-      <input class="form-input" id="pu-brand" placeholder="Samsung, Apple...">
+      <input class="form-input" id="pu-brand" list="brand-list" placeholder="Seleccionar o escribir marca..." autocomplete="off">
     </div>
     <div class="form-group">
       <label class="form-label">Modelo</label>
@@ -602,6 +720,9 @@
     <div id="sale-detail-content"></div>
     <button class="btn btn-whatsapp" id="btn-wa" style="margin-top:16px;margin-bottom:10px" onclick="sendWA()">
       💬 Notificar Proveedor (WhatsApp)
+    </button>
+    <button class="btn" id="btn-mark-paid" style="display:none;margin-bottom:10px;background:rgba(67,233,123,0.12);color:var(--accent3);border:1px solid rgba(67,233,123,0.3)" onclick="markSalePaid()">
+      ✅ Marcar como Cobrado
     </button>
     <button class="btn btn-danger btn-ghost" id="btn-del-sale" style="margin-bottom:10px;background:rgba(255,101,132,0.1);color:var(--accent2);border:1px solid rgba(255,101,132,0.3)" onclick="deleteSaleConfirm()">
       🗑 Eliminar Venta
@@ -668,6 +789,26 @@
       </div>
       <button class="btn btn-primary btn-sm" onclick="saveScriptUrl()" style="width:auto">Guardar y Conectar</button>
       <div id="sync-status" style="margin-top:10px;font-size:12px;color:var(--text2)"></div>
+    </div>
+    <div class="card" style="margin-bottom:12px;background:rgba(247,151,30,0.06);border-color:rgba(247,151,30,0.2)">
+      <div class="card-title" style="color:var(--accent4)">⚙️ Configuración General</div>
+      <div class="form-group">
+        <label class="form-label">Tasa de Cambio (C$ por US$)</label>
+        <input class="form-input" type="number" id="exchange-rate" value="37" placeholder="37">
+        <button class="btn btn-primary btn-sm" onclick="saveExchangeRate()" style="width:auto;margin-top:8px">Guardar Tasa</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px;background:rgba(255,101,132,0.06);border-color:rgba(255,101,132,0.2)">
+      <div class="card-title" style="color:var(--accent2)">💾 Respaldo de Datos</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Exporta todos tus datos en un archivo JSON para respaldo completo. Puedes restaurarlos después.</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-danger" onclick="backupData()">⬇️ Descargar Respaldo</button>
+        <label class="btn btn-ghost" style="cursor:pointer;text-align:center">
+          ⬆️ Restaurar Respaldo
+          <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreData(this)">
+        </label>
+        <div id="restore-status" style="font-size:12px;color:var(--text2);min-height:18px;text-align:center"></div>
+      </div>
     </div>
     <button class="btn btn-ghost" onclick="closeModal('modal-sheets')">Cerrar</button>
   </div>
@@ -760,8 +901,29 @@ function renderDashboard() {
   const salesMonth = db.sales.filter(s => new Date(s.date).getMonth() === month).length;
   document.getElementById('stat-total').textContent = total;
   document.getElementById('stat-available').textContent = available;
-  document.getElementById('stat-sales-today').textContent = salesToday;
-  document.getElementById('stat-sales-month').textContent = salesMonth;
+
+  // Ganancia neta mes en curso (USD, convertida con tasa)
+  const rate = getRate();
+  const salesThisMonth = db.sales.filter(s => new Date(s.date).getMonth() === month && new Date(s.date).getFullYear() === new Date().getFullYear());
+  let profitUSD = 0;
+  salesThisMonth.forEach(s => {
+    const p = db.products.find(x => x.id === s.productId);
+    const revUSD  = s.currency === 'US$' ? s.price : s.price / rate;
+    const costUSD = p ? (p.currency === 'US$' ? p.cost : p.cost / rate) : 0;
+    profitUSD += revUSD - costUSD;
+  });
+  const profitEl = document.getElementById('stat-profit-month');
+  profitEl.textContent = 'US$ ' + profitUSD.toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
+  profitEl.style.color = profitUSD >= 0 ? 'var(--accent3)' : 'var(--accent2)';
+
+  // Capital total invertido en inventario disponible (en USD)
+  let capitalUSD = 0;
+  db.products.filter(p => p.status === 'disponible').forEach(p => {
+    capitalUSD += p.currency === 'US$' ? p.cost : p.cost / rate;
+  });
+  const capEl = document.getElementById('stat-capital');
+  capEl.textContent = 'US$ ' + capitalUSD.toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
+  capEl.style.color = 'var(--accent4)';
 
   // Recent sales
   const recent = [...db.sales].reverse().slice(0, 5);
@@ -773,7 +935,7 @@ function renderDashboard() {
       <div class="item-icon" style="background:rgba(67,233,123,0.1)">📱</div>
       <div class="item-info">
         <div class="item-name">${p ? p.brand+' '+p.model : 'Equipo eliminado'}</div>
-        <div class="item-sub">${s.client} · ${s.payment}</div>
+        <div class="item-sub">${s.client||'Sin nombre'} · ${s.payment}${s.invoice?' · #'+s.invoice:''}</div>
       </div>
       <div class="item-right">
         <div class="item-price" style="color:var(--accent3)">${fmt(s.price, s.currency)}</div>
@@ -806,6 +968,7 @@ function openAddProduct() {
   ['p-brand','p-model','p-color','p-storage','p-imei','p-cost','p-price','p-notes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('p-supplier').value = 'Proveedor Principal (+50581108843)';
   setPCur('C$');
+  populateBrandDatalist();
   openModal('modal-product');
 }
 
@@ -824,14 +987,15 @@ function saveProduct() {
     price: parseFloat(document.getElementById('p-price').value) || 0,
     supplier: document.getElementById('p-supplier').value.trim(),
     notes: document.getElementById('p-notes').value.trim(),
-    status: 'disponible',
   };
   if (id) {
     const idx = db.products.findIndex(p => p.id === id);
+    // Preserve status and date when editing — never reset to 'disponible'
     if (idx >= 0) { db.products[idx] = {...db.products[idx], ...data}; }
   } else {
     data.id = 'p' + Date.now();
     data.date = new Date().toISOString();
+    data.status = 'disponible';
     db.products.push(data);
   }
   save(); closeModal('modal-product');
@@ -883,7 +1047,7 @@ function openProductDetail(id) {
     <div class="detail-row"><span class="detail-key">Marca / Modelo</span><span class="detail-val">${p.brand} ${p.model}</span></div>
     <div class="detail-row"><span class="detail-key">Color</span><span class="detail-val">${p.color||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Almacenamiento</span><span class="detail-val">${p.storage||'—'}</span></div>
-    <div class="detail-row"><span class="detail-key">IMEI / Serie</span><span class="detail-val">${p.imei||'—'}</span></div>
+    <div class="detail-row"><span class="detail-key">IMEI / SN</span><span class="detail-val">${p.imei||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Precio Costo</span><span class="detail-val">${fmt(p.cost, p.currency)}</span></div>
     <div class="detail-row"><span class="detail-key">Precio Venta</span><span class="detail-val">${fmt(p.price, p.currency)}</span></div>
     <div class="detail-row"><span class="detail-key">Ganancia</span><span class="detail-val ${profit>=0?'profit-pos':'profit-neg'}">${fmt(profit, p.currency)}</span></div>
@@ -898,6 +1062,7 @@ function editProductFromDetail() {
   const p = db.products.find(x => x.id === currentProductId);
   if (!p) return;
   closeModal('modal-product-detail');
+  populateBrandDatalist();
   document.getElementById('product-modal-title').textContent = 'Editar Equipo';
   document.getElementById('product-id').value = p.id;
   document.getElementById('p-brand').value = p.brand;
@@ -932,14 +1097,49 @@ function sharePrice() {
 }
 
 // ===================== SALES =====================
+function getBrands() {
+  const brands = [...new Set(db.products.map(p => p.brand).filter(Boolean))].sort();
+  return brands;
+}
+
+function populateBrandDatalist() {
+  const dl = document.getElementById('brand-list');
+  if (!dl) return;
+  dl.innerHTML = getBrands().map(b => `<option value="${b}">`).join('');
+}
+
+function populateSaleBrandFilter(available) {
+  const brands = [...new Set(available.map(p => p.brand).filter(Boolean))].sort();
+  const sel = document.getElementById('s-brand-filter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todas las marcas</option>' +
+    brands.map(b => `<option value="${b}" ${b===current?'selected':''}>${b}</option>`).join('');
+}
+
+function populateSaleProducts(available, brandFilter) {
+  const filtered = brandFilter ? available.filter(p => p.brand === brandFilter) : available;
+  const sel = document.getElementById('s-product');
+  sel.innerHTML = '<option value="">Seleccionar equipo...</option>' +
+    filtered.map(p => {
+      const detail = [p.storage, p.color, p.imei ? 'IMEI:'+p.imei.slice(-4) : ''].filter(Boolean).join(' · ');
+      return `<option value="${p.id}">${p.brand} ${p.model}${detail?' — '+detail:''} — ${fmt(p.price,p.currency)}</option>`;
+    }).join('');
+}
+
+function onBrandFilterChange() {
+  const available = db.products.filter(p => p.status === 'disponible');
+  const brand = document.getElementById('s-brand-filter').value;
+  populateSaleProducts(available, brand);
+  document.getElementById('s-product-info').style.display = 'none';
+}
+
 function openNewSale() {
   const available = db.products.filter(p => p.status === 'disponible');
   if (!available.length) { toast('⚠️ No hay equipos disponibles'); return; }
-  const sel = document.getElementById('s-product');
-  sel.innerHTML = '<option value="">Seleccionar equipo...</option>' +
-    available.map(p => `<option value="${p.id}">${p.brand} ${p.model} ${p.storage?'('+p.storage+')':''} - ${fmt(p.price,p.currency)}</option>`).join('');
+  populateSaleBrandFilter(available);
+  populateSaleProducts(available, '');
   document.getElementById('s-product-info').style.display = 'none';
-  ['s-client','s-phone','s-notes'].forEach(id => document.getElementById(id).value = '');
+  ['s-client','s-phone','s-notes','s-invoice'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('s-price').value = '';
   document.getElementById('s-payment').value = 'Contado';
   setSCur('C$');
@@ -963,19 +1163,22 @@ function saveSale() {
   const client = document.getElementById('s-client').value.trim();
   const price = parseFloat(document.getElementById('s-price').value);
   if (!productId) { toast('⚠️ Selecciona un equipo'); return; }
-  if (!client) { toast('⚠️ Ingresa el nombre del cliente'); return; }
   if (!price || isNaN(price)) { toast('⚠️ Ingresa el precio'); return; }
+  const payment = document.getElementById('s-payment').value;
+  const isCredit = ['Crédito 1 mes','Tasa 0% BAC','Tasa 0% Banpro','Tasa 0% Ficohsa','Tasa 0% Lafise'].includes(payment);
   const sale = {
     id: 's' + Date.now(),
     productId,
     client,
     phone: document.getElementById('s-phone').value.trim(),
-    payment: document.getElementById('s-payment').value,
+    payment,
     currency: sCurrency,
     price,
     notes: document.getElementById('s-notes').value.trim(),
+    invoice: document.getElementById('s-invoice').value.trim(),
     date: new Date().toISOString(),
-    waNotified: false
+    waNotified: false,
+    cobrado: isCredit ? false : true
   };
   db.sales.push(sale);
   const pIdx = db.products.findIndex(p => p.id === productId);
@@ -998,7 +1201,15 @@ function filterSales(f, el) {
 function renderSales() {
   const today = new Date().toDateString();
   const month = new Date().getMonth();
+  const q = (document.getElementById('sales-search')?.value || '').toLowerCase();
   let sales = [...db.sales].reverse().filter(s => {
+    const p = db.products.find(x => x.id === s.productId);
+    const matchSearch = !q ||
+      s.client.toLowerCase().includes(q) ||
+      (s.phone||'').includes(q) ||
+      (p ? (p.brand+' '+p.model).toLowerCase().includes(q) : false) ||
+      s.payment.toLowerCase().includes(q);
+    if (!matchSearch) return false;
     if (salesFilter === 'hoy') return new Date(s.date).toDateString() === today;
     if (salesFilter === 'mes') return new Date(s.date).getMonth() === month;
     return true;
@@ -1012,11 +1223,12 @@ function renderSales() {
       <div class="item-icon" style="background:rgba(67,233,123,0.1)">📱</div>
       <div class="item-info">
         <div class="item-name">${p ? p.brand+' '+p.model : 'Equipo eliminado'}</div>
-        <div class="item-sub">${s.client} · ${s.payment}</div>
+        <div class="item-sub">${s.client||'Sin nombre'} · ${s.payment}${s.invoice?' · #'+s.invoice:''}</div>
       </div>
       <div class="item-right">
         <div class="item-price" style="color:var(--accent3)">${fmt(s.price, s.currency)}</div>
         <div style="font-size:11px;color:var(--text2);margin-top:3px">${waIcon} ${new Date(s.date).toLocaleDateString('es-NI')}</div>
+        ${s.cobrado === false ? '<div class="item-badge badge-yellow" style="margin-top:3px">⏳ Por cobrar</div>' : ''}
       </div>
     </div>`;
   }).join('');
@@ -1029,16 +1241,27 @@ function openSaleDetail(id) {
   const p = db.products.find(x => x.id === s.productId);
   document.getElementById('sale-detail-content').innerHTML = `
     <div class="detail-row"><span class="detail-key">Equipo</span><span class="detail-val">${p ? p.brand+' '+p.model : 'Eliminado'}</span></div>
-    ${p ? `<div class="detail-row"><span class="detail-key">IMEI</span><span class="detail-val">${p.imei||'—'}</span></div>` : ''}
+    ${p ? `<div class="detail-row"><span class="detail-key">IMEI/SN</span><span class="detail-val">${p.imei||'—'}</span></div>` : ''}
     <div class="detail-row"><span class="detail-key">Cliente</span><span class="detail-val">${s.client}</span></div>
     <div class="detail-row"><span class="detail-key">Teléfono</span><span class="detail-val">${s.phone||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Forma de Pago</span><span class="detail-val">${s.payment}</span></div>
     <div class="detail-row"><span class="detail-key">Precio Vendido</span><span class="detail-val" style="color:var(--accent3)">${fmt(s.price, s.currency)}</span></div>
     ${p ? `<div class="detail-row"><span class="detail-key">Precio Costo</span><span class="detail-val">${fmt(p.cost, p.currency)}</span></div>` : ''}
-    ${p ? `<div class="detail-row"><span class="detail-key">Ganancia</span><span class="detail-val ${(s.price-p.cost)>=0?'profit-pos':'profit-neg'}">${fmt(s.price-p.cost, s.currency)}</span></div>` : ''}
+    ${p ? (() => {
+      const rate = getRate();
+      const revUSD  = s.currency  === 'US$' ? s.price  : s.price  / rate;
+      const costUSD = p.currency  === 'US$' ? p.cost   : p.cost   / rate;
+      const profitUSD = revUSD - costUSD;
+      const profitNIO = profitUSD * rate;
+      return `<div class="detail-row"><span class="detail-key">Ganancia</span><span class="detail-val ${profitUSD>=0?'profit-pos':'profit-neg'}">US$ ${profitUSD.toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2})} / C$ ${profitNIO.toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>`;
+    })() : ''}
+    ${s.invoice ? `<div class="detail-row"><span class="detail-key">N° Factura</span><span class="detail-val badge-blue" style="font-family:'Syne',sans-serif;font-weight:700">${s.invoice}</span></div>` : ''}
     <div class="detail-row"><span class="detail-key">Fecha</span><span class="detail-val">${new Date(s.date).toLocaleString('es-NI')}</span></div>
     <div class="detail-row"><span class="detail-key">Notas</span><span class="detail-val">${s.notes||'—'}</span></div>
-    <div class="detail-row"><span class="detail-key">WA Proveedor</span><span class="detail-val">${s.waNotified ? '✅ Notificado' : '⏳ Pendiente'}</span></div>`;
+    <div class="detail-row"><span class="detail-key">WA Proveedor</span><span class="detail-val">${s.waNotified ? '✅ Notificado' : '⏳ Pendiente'}</span></div>
+    ${s.cobrado === false ? `<div class="detail-row"><span class="detail-key">Estado Cobro</span><span class="detail-val"><span class="item-badge badge-yellow">⏳ Pendiente</span></span></div>` : ''}`;
+  // Show mark-as-paid button only for pending credit sales
+  document.getElementById('btn-mark-paid').style.display = (s.cobrado === false) ? 'flex' : 'none';
   openModal('modal-sale-detail');
 }
 
@@ -1046,7 +1269,7 @@ function sendWA() {
   const s = db.sales.find(x => x.id === currentSaleId);
   if (!s) return;
   const p = db.products.find(x => x.id === s.productId);
-  const msg = `Hola! Le informo que se realizó una venta:\n\n📱 *Equipo:* ${p ? p.brand+' '+p.model : 'N/A'}${p&&p.storage?' ('+p.storage+')':''}${p&&p.color?' - '+p.color:''}\n💰 *Precio:* ${p ? fmt(p.cost, p.currency) : '—'}${p&&p.imei?'\n🔑 *IMEI:* '+p.imei:''}\n\nGracias! 🙏`;
+  const msg = `Hola! Le informo que se realizó una venta:\n\n📱 *Equipo:* ${p ? p.brand+' '+p.model : 'N/A'}${p&&p.storage?' ('+p.storage+')':''}${p&&p.color?' - '+p.color:''}\n💰 *Precio:* ${p ? fmt(p.cost, p.currency) : '—'}${p&&p.imei?'\n🔑 *IMEI/SN:* '+p.imei:''}\n\nGracias! 🙏`;
   const url = `https://wa.me/50581108843?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
   // Mark as notified
@@ -1069,6 +1292,14 @@ function deleteSaleConfirm() {
   }
 }
 
+function markSalePaid() {
+  const idx = db.sales.findIndex(x => x.id === currentSaleId);
+  if (idx >= 0) { db.sales[idx].cobrado = true; save(); }
+  toast('✅ Venta marcada como cobrada');
+  closeModal('modal-sale-detail');
+  renderSales();
+}
+
 // ===================== PURCHASES =====================
 function openAddPurchase() {
   ['pu-brand','pu-model','pu-storage','pu-notes'].forEach(id => document.getElementById(id).value = '');
@@ -1077,6 +1308,7 @@ function openAddPurchase() {
   document.getElementById('pu-price').value = '';
   document.getElementById('pu-supplier').value = 'Proveedor Principal (+50581108843)';
   setPUCur('C$');
+  populateBrandDatalist();
   openModal('modal-purchase');
 }
 
@@ -1093,9 +1325,10 @@ function savePurchase() {
   const purchaseId = 'pu' + Date.now();
 
   // Create individual product entries
+  const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('p' + Date.now() + Math.random().toString(36).slice(2,9));
   for (let i = 0; i < qty; i++) {
     db.products.push({
-      id: 'p' + Date.now() + i,
+      id: uid(),
       brand, model, storage, color: '',
       currency: puCurrency, cost, price, supplier, notes,
       status: 'disponible',
@@ -1119,8 +1352,12 @@ function savePurchase() {
 
 function renderPurchases() {
   const el = document.getElementById('purchases-list');
-  if (!db.purchases.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🛒</div><p>No hay compras registradas</p></div>'; return; }
-  el.innerHTML = [...db.purchases].reverse().map(pu => `
+  const q = (document.getElementById('purchases-search')?.value || '').toLowerCase();
+  const filtered = [...db.purchases].reverse().filter(pu =>
+    !q || (pu.brand+' '+pu.model).toLowerCase().includes(q) || (pu.supplier||'').toLowerCase().includes(q)
+  );
+  if (!filtered.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🛒</div><p>No hay compras</p></div>'; return; }
+  el.innerHTML = filtered.map(pu => `
     <div class="list-item">
       <div class="item-icon" style="background:rgba(108,99,255,0.1)">📥</div>
       <div class="item-info">
@@ -1175,6 +1412,11 @@ async function syncToSheets(type) {
   if (!db.config.scriptUrl) return;
   const url = db.config.scriptUrl;
   const data = type === 'inventory' ? db.products : type === 'sales' ? db.sales : db.purchases;
+  const bar = document.getElementById('sync-bar');
+  const msg = document.getElementById('sync-bar-msg');
+  const labels = { inventory: 'inventario', sales: 'ventas', purchases: 'compras' };
+  bar.style.display = 'flex';
+  msg.textContent = 'Sincronizando ' + labels[type] + '...';
   try {
     await fetch(url, {
       method: 'POST',
@@ -1182,7 +1424,14 @@ async function syncToSheets(type) {
       body: JSON.stringify({ action: 'sync', type, data }),
       headers: { 'Content-Type': 'text/plain' }
     });
-  } catch(e) { /* silent */ }
+    msg.textContent = '✅ ' + labels[type].charAt(0).toUpperCase() + labels[type].slice(1) + ' sincronizado';
+  } catch(e) {
+    msg.textContent = '⚠️ No se pudo sincronizar. Verifica conexión.';
+    bar.style.background = 'rgba(255,101,132,0.12)';
+    bar.style.borderBottomColor = 'rgba(255,101,132,0.25)';
+    document.getElementById('sync-bar-msg').style.color = '#ff6584';
+  }
+  setTimeout(() => { bar.style.display = 'none'; bar.style.background = ''; bar.style.borderBottomColor = ''; msg.style.color = ''; }, 3000);
 }
 
 function exportCSV(type) {
@@ -1191,10 +1440,10 @@ function exportCSV(type) {
     headers = ['ID','Marca','Modelo','Color','Almacenamiento','IMEI','Moneda','Costo','Precio Venta','Proveedor','Estado','Fecha Entrada','Notas'];
     rows = db.products.map(p => [p.id,p.brand,p.model,p.color||'',p.storage||'',p.imei||'',p.currency,p.cost,p.price,p.supplier||'',p.status,p.date?new Date(p.date).toLocaleDateString('es-NI'):'',p.notes||'']);
   } else if (type === 'sales') {
-    headers = ['ID','Equipo','Cliente','Teléfono','Forma de Pago','Moneda','Precio','Fecha','WA Notificado','Notas'];
+    headers = ['ID','Equipo','Cliente','Teléfono','Forma de Pago','Moneda','Precio','N° Factura','Fecha','WA Notificado','Estado Cobro','Notas'];
     rows = db.sales.map(s => {
       const p = db.products.find(x => x.id === s.productId);
-      return [s.id, p ? p.brand+' '+p.model : 'N/A', s.client, s.phone||'', s.payment, s.currency, s.price, new Date(s.date).toLocaleDateString('es-NI'), s.waNotified?'Sí':'No', s.notes||''];
+      return [s.id, p ? p.brand+' '+p.model : 'N/A', s.client||'', s.phone||'', s.payment, s.currency, s.price, s.invoice||'', new Date(s.date).toLocaleDateString('es-NI'), s.waNotified?'Sí':'No', s.cobrado===false?'Pendiente':'Cobrado', s.notes||''];
     });
   } else {
     headers = ['ID','Marca','Modelo','Almacenamiento','Cantidad','Moneda','Costo/u','Precio/u','Total','Proveedor','Fecha','Notas'];
@@ -1213,6 +1462,118 @@ function exportCSV(type) {
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
 });
+
+// Confirm before closing app
+window.addEventListener('beforeunload', e => {
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+// ===================== BARCODE SCANNER =====================
+let scannerTargetId = null;
+let codeReader = null;
+let scannerStream = null;
+
+async function openScanner(targetInputId) {
+  scannerTargetId = targetInputId;
+  document.getElementById('scanner-result').style.display = 'none';
+  document.getElementById('scanner-result').textContent = '';
+  document.getElementById('scanner-hint').textContent = 'Apunta al código de barras del IMEI';
+  document.getElementById('scanner-modal').classList.add('open');
+
+  try {
+    // Request camera
+    scannerStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const video = document.getElementById('scanner-video');
+    video.srcObject = scannerStream;
+    await video.play();
+
+    // Start decoding
+    if (typeof ZXing !== 'undefined') {
+      codeReader = new ZXing.BrowserMultiFormatReader();
+      codeReader.decodeFromVideoElement(video, (result, err) => {
+        if (result) {
+          const text = result.getText();
+          onScanSuccess(text);
+        }
+      });
+    } else {
+      // Fallback: manual input hint
+      document.getElementById('scanner-hint').textContent = 'Escáner no disponible. Ingresa el IMEI manualmente.';
+    }
+  } catch(e) {
+    document.getElementById('scanner-hint').textContent = '⚠️ No se pudo acceder a la cámara. Verifica los permisos en Ajustes → Safari.';
+  }
+}
+
+function onScanSuccess(text) {
+  const resEl = document.getElementById('scanner-result');
+  resEl.textContent = '✅ ' + text;
+  resEl.style.display = 'block';
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // If scanning for sale, try to match product by IMEI/SN
+  if (scannerTargetId === 'sale-imei-scan') {
+    const match = db.products.find(p => p.status === 'disponible' && p.imei && p.imei.trim() === text.trim());
+    if (match) {
+      document.getElementById('scanner-hint').textContent = '✅ Equipo encontrado: ' + match.brand + ' ' + match.model;
+      resEl.textContent = '✅ ' + match.brand + ' ' + match.model + (match.storage ? ' ('+match.storage+')' : '');
+    } else {
+      document.getElementById('scanner-hint').textContent = '⚠️ No se encontró equipo con ese IMEI/SN disponible';
+      resEl.style.background = 'rgba(247,151,30,0.3)';
+    }
+    resEl.onclick = () => {
+      closeScanner();
+      if (match) {
+        // Auto-select in dropdown
+        const sel = document.getElementById('s-product');
+        sel.value = match.id;
+        onProductSelect();
+        document.getElementById('sale-scan-hint').style.display = 'none';
+        toast('✅ Equipo seleccionado: ' + match.brand + ' ' + match.model);
+      } else {
+        toast('⚠️ IMEI/SN no encontrado en inventario disponible');
+      }
+    };
+    setTimeout(() => {
+      if (document.getElementById('scanner-modal').classList.contains('open')) {
+        closeScanner();
+        if (match) {
+          document.getElementById('s-product').value = match.id;
+          onProductSelect();
+          toast('✅ Equipo seleccionado: ' + match.brand + ' ' + match.model);
+        } else {
+          toast('⚠️ IMEI/SN no encontrado en inventario');
+        }
+      }
+    }, 2500);
+  } else {
+    // Normal IMEI field fill
+    document.getElementById('scanner-hint').textContent = '¡Código detectado! Toca para usar.';
+    resEl.onclick = () => {
+      document.getElementById(scannerTargetId).value = text;
+      closeScanner();
+      toast('✅ Capturado: ' + text);
+    };
+    setTimeout(() => {
+      if (document.getElementById('scanner-modal').classList.contains('open')) {
+        document.getElementById(scannerTargetId).value = text;
+        closeScanner();
+        toast('✅ Capturado: ' + text);
+      }
+    }, 2500);
+  }
+}
+
+function closeScanner() {
+  document.getElementById('scanner-modal').classList.remove('open');
+  if (codeReader) { try { codeReader.reset(); } catch(e){} codeReader = null; }
+  if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+}
+// Stop camera if user navigates away
+document.addEventListener('visibilitychange', () => { if (document.hidden) closeScanner(); });
 
 // ===================== IMPORT CSV =====================
 function importCSV(input) {
@@ -1265,10 +1626,12 @@ function importCSV(input) {
 
         if (!brand && !model) { skipped++; continue; }
 
+        const validCur = ['C$','US$'].includes(currency) ? currency : 'C$';
+        if (!['C$','US$'].includes(currency) && currency) skipped++;  // only count bad rows, not missing
         db.products.push({
-          id: 'p' + Date.now() + '_' + i,
+          id: 'p' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,6),
           brand, model, color, storage, imei,
-          currency: ['C$','US$'].includes(currency) ? currency : 'C$',
+          currency: validCur,
           cost, price, supplier, notes,
           status: 'disponible',
           date: new Date().toISOString()
@@ -1302,6 +1665,172 @@ function downloadImportTemplate() {
   a.click();
   toast('📥 Plantilla descargada');
 }
+
+// ===================== EXCHANGE RATE =====================
+function getRate() { return parseFloat(db.config.exchangeRate) || 37; }
+
+function saveExchangeRate() {
+  const r = parseFloat(document.getElementById('exchange-rate').value);
+  if (!r || r <= 0) { toast('⚠️ Tasa inválida'); return; }
+  db.config.exchangeRate = r;
+  save();
+  toast('✅ Tasa guardada: C$ ' + r + ' x US$1');
+}
+
+function toUSD(amount, currency) {
+  if (currency === 'US$') return amount;
+  return amount / getRate();
+}
+function toNIO(amount, currency) {
+  if (currency === 'C$') return amount;
+  return amount * getRate();
+}
+
+// ===================== REPORTS =====================
+function generateReport() {
+  const fromVal = document.getElementById('rep-from').value;
+  const toVal   = document.getElementById('rep-to').value;
+  if (!fromVal || !toVal) { toast('⚠️ Selecciona el periodo'); return; }
+
+  const from = new Date(fromVal + 'T00:00:00');
+  const to   = new Date(toVal   + 'T23:59:59');
+  if (from > to) { toast('⚠️ La fecha inicial debe ser antes de la final'); return; }
+
+  const rate = getRate();
+  const salesInPeriod = db.sales.filter(s => {
+    const d = new Date(s.date);
+    return d >= from && d <= to;
+  });
+
+  let totalRevenueUSD = 0, totalCostUSD = 0;
+  const byPayment = {};
+  const byProduct = {};
+
+  salesInPeriod.forEach(s => {
+    const p = db.products.find(x => x.id === s.productId);
+    const revUSD  = toUSD(s.price, s.currency);
+    const costUSD = p ? toUSD(p.cost, p.currency) : 0;
+    totalRevenueUSD += revUSD;
+    totalCostUSD    += costUSD;
+
+    byPayment[s.payment] = (byPayment[s.payment] || 0) + revUSD;
+
+    const name = p ? p.brand + ' ' + p.model : 'Equipo eliminado';
+    if (!byProduct[name]) byProduct[name] = { qty: 0, rev: 0, cost: 0 };
+    byProduct[name].qty++;
+    byProduct[name].rev  += revUSD;
+    byProduct[name].cost += costUSD;
+  });
+
+  const profitUSD = totalRevenueUSD - totalCostUSD;
+  const fUSD = v => 'US$ ' + v.toLocaleString('es-NI', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fNIO = v => 'C$ '  + (v * rate).toLocaleString('es-NI', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  const payRows = Object.entries(byPayment)
+    .sort((a,b) => b[1]-a[1])
+    .map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${fUSD(v)}</span></div>`)
+    .join('');
+
+  const prodRows = Object.entries(byProduct)
+    .sort((a,b) => b[1].qty - a[1].qty)
+    .slice(0, 8)
+    .map(([k,v]) => `<div class="detail-row">
+      <span class="detail-key">${k} <span style="color:var(--accent);font-size:11px">(${v.qty})</span></span>
+      <span class="detail-val ${(v.rev-v.cost)>=0?'profit-pos':'profit-neg'}">${fUSD(v.rev - v.cost)}</span>
+    </div>`)
+    .join('');
+
+  const fDate = d => d.toLocaleDateString('es-NI',{day:'2-digit',month:'short',year:'numeric'});
+  const el = document.getElementById('report-result');
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Resumen · ${fDate(from)} — ${fDate(to)}</div>
+      <div class="stats-grid" style="margin-bottom:0">
+        <div class="stat-card s2">
+          <div class="stat-icon">💰</div>
+          <div class="stat-label">Ventas Totales</div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700">${fUSD(totalRevenueUSD)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${fNIO(totalRevenueUSD)}</div>
+        </div>
+        <div class="stat-card s3">
+          <div class="stat-icon">📈</div>
+          <div class="stat-label">Ganancia Neta</div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:${profitUSD>=0?'var(--accent3)':'var(--accent2)'}">${fUSD(profitUSD)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${fNIO(profitUSD)}</div>
+        </div>
+        <div class="stat-card s1">
+          <div class="stat-icon">🛍️</div>
+          <div class="stat-label">Nº de Ventas</div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700">${salesInPeriod.length}</div>
+        </div>
+        <div class="stat-card s4">
+          <div class="stat-icon">📦</div>
+          <div class="stat-label">Costo Total</div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700">${fUSD(totalCostUSD)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${fNIO(totalCostUSD)}</div>
+        </div>
+      </div>
+    </div>
+    ${payRows ? `<div class="card" style="margin-bottom:12px">
+      <div class="card-title">Por Forma de Pago</div>
+      ${payRows}
+    </div>` : ''}
+    ${prodRows ? `<div class="card" style="margin-bottom:12px">
+      <div class="card-title">Ganancia por Equipo (Top 8)</div>
+      ${prodRows}
+    </div>` : ''}
+    ${!salesInPeriod.length ? '<div class="empty"><div class="empty-icon">📊</div><p>No hay ventas en este periodo</p></div>' : ''}
+  `;
+}
+
+// ===================== BACKUP / RESTORE =====================
+function backupData() {
+  const json = JSON.stringify(db, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'titi_cell_respaldo_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  toast('💾 Respaldo descargado');
+}
+
+function restoreData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const el = document.getElementById('restore-status');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed.products || !parsed.sales) throw new Error('Formato inválido');
+      if (!confirm('¿Restaurar datos? Esto reemplazará toda la información actual.')) return;
+      db = parsed;
+      if (!db.config) db.config = {};
+      if (!db.config.scriptUrl) db.config.scriptUrl = 'https://script.google.com/macros/s/AKfycbzf24_Lsx2ro8JvV_PUSl6YE7EGL6RG-Mx3mAoj-tg5_bW1ujn4GW_AWuEMbiBGn7Jpbw/exec';
+      save();
+      refreshAll();
+      // Re-sync all sheets after restore
+      syncToSheets('inventory');
+      setTimeout(() => syncToSheets('sales'), 800);
+      setTimeout(() => syncToSheets('purchases'), 1600);
+      el.textContent = '✅ Datos restaurados y sincronizados';
+      el.style.color = 'var(--accent3)';
+      toast('✅ Respaldo restaurado');
+    } catch(err) {
+      el.textContent = '❌ Archivo inválido. Usa un respaldo generado por la app.';
+      el.style.color = 'var(--accent2)';
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// Pre-load exchange rate field when sheets modal opens
+const _origOpenSheets = openSheetsModal;
+openSheetsModal = function() {
+  _origOpenSheets();
+  document.getElementById('exchange-rate').value = getRate();
+};
 </script>
 </body>
 </html>
