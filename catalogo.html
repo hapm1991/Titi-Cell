@@ -343,7 +343,8 @@ function applyFilters() {
 
 const toUSD=(v,c)=>c==='US$'?v:v/RATE;
 const fmt=(v,c)=>c+' '+parseFloat(v||0).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
-const alt=(p)=>p.currency==='US$'?'C$ '+(p.price*RATE).toLocaleString('es-NI',{minimumFractionDigits:0,maximumFractionDigits:0}):'US$ '+toUSD(p.price,'C$').toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
+const toNIO=(p)=>'C$ '+(p.currency==='C$'?p.price:p.price*RATE).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
+const toUSD2=(p)=>'US$ '+toUSD(p.price,p.currency).toLocaleString('es-NI',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 function card(p) {
   const specs=[p.storage,p.color].filter(Boolean).join(' · ');
@@ -401,7 +402,7 @@ function sendWA(id) {
   const p = all.find(x => x.id === id);
   if (!p) return;
   const specs = [p.storage, p.color].filter(Boolean).join(', ');
-  const msg = `Hola! Vi el catálogo de Titi Cell y me interesa:\n\n📱 *${p.brand} ${p.model}*${specs ? ' (' + specs + ')' : ''}\n💰 Precio: *${fmt(p.price, p.currency)}*\n\n¿Está disponible? 😊`;
+  const msg = `Hola! Vi el catálogo de Titi Cell y me interesa:\n\n📱 *${p.brand} ${p.model}*${specs ? ' (' + specs + ')' : ''}\n💰 Precio: *${toNIO(p)}* (${toUSD2(p)})\n\n¿Está disponible? 😊`;
   window.open(`https://wa.me/${WA_NUM}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
