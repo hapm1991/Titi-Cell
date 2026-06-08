@@ -397,6 +397,14 @@ function closeModal() {
   document.body.style.overflow='';
 }
 
+function sendWA(id) {
+  const p = all.find(x => x.id === id);
+  if (!p) return;
+  const specs = [p.storage, p.color].filter(Boolean).join(', ');
+  const msg = `Hola! Vi el catálogo de Titi Cell y me interesa:\n\n📱 *${p.brand} ${p.model}*${specs ? ' (' + specs + ')' : ''}\n💰 Precio: *${fmt(p.price, p.currency)}*\n\n¿Está disponible? 😊`;
+  window.open(`https://wa.me/${WA_NUM}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
 load();
 </script>
 </body>
