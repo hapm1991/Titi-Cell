@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test Login</title>
+<style>
+  body{font-family:sans-serif;padding:20px;background:#111;color:#fff;max-width:400px;margin:0 auto}
+  input{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:1px solid #444;background:#222;color:#fff;font-size:16px;box-sizing:border-box}
+  button{width:100%;padding:14px;background:#6c63ff;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin-top:8px}
+  pre{background:#1a1a1a;padding:12px;border-radius:8px;font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:16px}
+</style>
+</head>
+<body>
+<h2>Test Supabase Login</h2>
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="pass" placeholder="Contraseña">
+<button onclick="test()">Probar</button>
+<pre id="result">Resultado aparece aquí...</pre>
+<script>
+async function test() {
+  const email = document.getElementById('email').value;
+  const pass  = document.getElementById('pass').value;
+  document.getElementById('result').textContent = 'Probando...';
+  try {
+    const r = await fetch('https://sqkflifdnfgeufawepfp.supabase.co/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: {
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxa2ZsaWZkbmZnZXVmYXdlcGZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4Njc2NzYsImV4cCI6MjA5NjQ0MzY3Nn0.d7jSOkVaN00wxzBTAfGAC_CXEPkQH4h8GHi0uk9njZ8',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await r.json();
+    document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    document.getElementById('result').textContent = 'Error: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>
