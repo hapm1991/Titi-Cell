@@ -407,6 +407,121 @@
       </div>
     </div>
 
+    <!-- INVENTARIO -->
+    <div class="page" id="page-inventory">
+      <div style="padding:16px">
+        <div class="section-title">
+          Inventario
+          <button class="btn btn-primary btn-sm" onclick="openAddProduct()">+ Agregar</button>
+        </div>
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Buscar equipo..." id="inv-search" oninput="renderInventory()">
+        </div>
+        <div class="tabs">
+          <div class="tab" onclick="filterInventory('todos',this)">Todos</div>
+          <div class="tab active" onclick="filterInventory('disponible',this)">Disponibles</div>
+          <div class="tab" onclick="filterInventory('vendido',this)">Vendidos</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <select class="form-select" id="inv-category" onchange="renderInventory()" style="flex:1;padding:9px 12px;font-size:13px">
+            <option value="">Todas las categorías</option><option value="Celular">Celular</option><option value="Tablet">Tablet</option><option value="Cargador">Cargador</option><option value="Auriculares">Auriculares</option><option value="Cable">Cable</option><option value="Funda">Funda</option><option value="Vidrio Templado">Vidrio Templado</option><option value="Accesorio">Accesorio</option><option value="Otro">Otro</option>
+          </select>
+          <select class="form-select" id="inv-price-sort" onchange="renderInventory()" style="flex:1;padding:9px 12px;font-size:13px">
+            <option value="">Sin ordenar</option>
+            <option value="asc">Menor precio</option>
+            <option value="desc">Mayor precio</option>
+          </select>
+        </div>
+        <div id="inventory-list"></div>
+      </div>
+    </div>
+
+    <!-- VENTAS -->
+    <div class="page" id="page-sales">
+      <div style="padding:16px">
+        <div class="section-title">
+          Ventas
+          <button class="btn btn-success btn-sm" onclick="openNewSale()">+ Nueva</button>
+        </div>
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Buscar cliente o equipo..." id="sales-search" oninput="renderSales()">
+        </div>
+        <div class="tabs">
+          <div class="tab active" onclick="filterSales('todas',this)">Todas</div>
+          <div class="tab" onclick="filterSales('hoy',this)">Hoy</div>
+          <div class="tab" onclick="filterSales('mes',this)">Este Mes</div>
+        </div>
+        <div id="sales-list"></div>
+      </div>
+    </div>
+
+    <!-- COMPRAS -->
+    <div class="page" id="page-purchases">
+      <div style="padding:16px">
+        <div class="section-title">
+          Compras / Entradas
+          <button class="btn btn-primary btn-sm" onclick="openAddPurchase()">+ Nueva</button>
+        </div>
+        <div class="search-box">
+          <span>🔍</span>
+          <input type="text" placeholder="Buscar compra..." id="purchases-search" oninput="renderPurchases()">
+        </div>
+        <div id="purchases-list"></div>
+      </div>
+    </div>
+
+    <!-- REPORTES -->
+    <div class="page" id="page-reports">
+      <div style="padding:16px">
+        <div class="section-title">
+          Reportes
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-pdf')">📄 PDF</button>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-title">Periodo</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Desde</label>
+              <input class="form-input" type="date" id="rep-from">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hasta</label>
+              <input class="form-input" type="date" id="rep-to">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateReport()">📊 Generar Reporte</button>
+        </div>
+        <div id="report-result"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav>
+    <div class="nav-item active" onclick="goTo('home',this)">
+      <div class="nav-icon">🏠</div>
+      <div class="nav-label">Inicio</div>
+    </div>
+    <div class="nav-item" onclick="goTo('inventory',this)">
+      <div class="nav-icon">📦</div>
+      <div class="nav-label">Inventario</div>
+    </div>
+    <div class="nav-item" onclick="goTo('sales',this)">
+      <div class="nav-icon">💳</div>
+      <div class="nav-label">Ventas</div>
+    </div>
+    <div class="nav-item" onclick="goTo('purchases',this)">
+      <div class="nav-icon">🛒</div>
+      <div class="nav-label">Compras</div>
+    </div>
+    <div class="nav-item" onclick="goTo('reports',this)">
+      <div class="nav-icon">📈</div>
+      <div class="nav-label">Reportes</div>
+    </div>
+  </nav>
+
 <!-- PDF EXPORT MODAL -->
 <div class="modal-overlay" id="modal-pdf">
   <div class="modal">
