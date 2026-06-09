@@ -431,6 +431,24 @@
           <div class="tab active" onclick="filterInventory('disponible',this)">Disponibles</div>
           <div class="tab" onclick="filterInventory('vendido',this)">Vendidos</div>
         </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <select class="form-select" id="inv-category" onchange="renderInventory()" style="flex:1;padding:9px 12px;font-size:13px">
+            <option value="">Todas las categorías</option>
+            <option value="Celular">Celular</option>
+            <option value="Cargador">Cargador</option>
+            <option value="Auriculares">Auriculares</option>
+            <option value="Cable">Cable</option>
+            <option value="Funda">Funda</option>
+            <option value="Vidrio Templado">Vidrio Templado</option>
+            <option value="Accesorio">Accesorio</option>
+            <option value="Otro">Otro</option>
+          </select>
+          <select class="form-select" id="inv-price-sort" onchange="renderInventory()" style="flex:1;padding:9px 12px;font-size:13px">
+            <option value="">Sin ordenar</option>
+            <option value="asc">Menor precio</option>
+            <option value="desc">Mayor precio</option>
+          </select>
+        </div>
         <div id="inventory-list"></div>
       </div>
     </div>
@@ -547,6 +565,19 @@
       <label class="form-label">Marca</label>
       <input class="form-input" id="p-brand" list="brand-list" placeholder="Seleccionar o escribir marca..." autocomplete="off">
       <datalist id="brand-list"></datalist>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoría</label>
+      <select class="form-select" id="p-category">
+        <option value="Celular">Celular</option>
+        <option value="Cargador">Cargador</option>
+        <option value="Auriculares">Auriculares</option>
+        <option value="Cable">Cable</option>
+        <option value="Funda">Funda</option>
+        <option value="Vidrio Templado">Vidrio Templado</option>
+        <option value="Accesorio">Accesorio</option>
+        <option value="Otro">Otro</option>
+      </select>
     </div>
     <div class="form-group">
       <label class="form-label">Modelo</label>
@@ -703,6 +734,19 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Nueva Entrada de Inventario</div>
+    <div class="form-group">
+      <label class="form-label">Categoría</label>
+      <select class="form-select" id="pu-category">
+        <option value="Celular">Celular</option>
+        <option value="Cargador">Cargador</option>
+        <option value="Auriculares">Auriculares</option>
+        <option value="Cable">Cable</option>
+        <option value="Funda">Funda</option>
+        <option value="Vidrio Templado">Vidrio Templado</option>
+        <option value="Accesorio">Accesorio</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
     <div class="form-group">
       <label class="form-label">Marca</label>
       <input class="form-input" id="pu-brand" list="brand-list" placeholder="Seleccionar o escribir marca..." autocomplete="off">
@@ -975,12 +1019,12 @@ async function sbUpsertConfig(key, value) {
 }
 
 // ── Map JS objects to Supabase row format ──
-const toProductRow  = p => ({ id:p.id, brand:p.brand, model:p.model, color:p.color||'', storage:p.storage||'', imei:p.imei||'', currency:p.currency, cost:p.cost, price:p.price, supplier:p.supplier||'', status:p.status, notes:p.notes||'', date:p.date||new Date().toISOString(), purchase_id:p.purchaseId||null, product_snapshot:p.productSnapshot||null, image_url:p.imageUrl||null });
+const toProductRow  = p => ({ id:p.id, brand:p.brand, model:p.model, color:p.color||'', storage:p.storage||'', imei:p.imei||'', currency:p.currency, cost:p.cost, price:p.price, supplier:p.supplier||'', status:p.status, notes:p.notes||'', date:p.date||new Date().toISOString(), purchase_id:p.purchaseId||null, product_snapshot:p.productSnapshot||null, image_url:p.imageUrl||null, category:p.category||'Celular' });
 const toSaleRow     = s => ({ id:s.id, product_id:s.productId, client:s.client||'', phone:s.phone||'', payment:s.payment, currency:s.currency, price:s.price, invoice:s.invoice||'', notes:s.notes||'', date:s.date, wa_notified:s.waNotified||false, cobrado:s.cobrado!==false, product_snapshot:s.productSnapshot||null });
 const toPurchaseRow = p => ({ id:p.id, brand:p.brand, model:p.model, storage:p.storage||'', qty:p.qty, currency:p.currency, cost:p.cost, price:p.price, supplier:p.supplier||'', notes:p.notes||'', date:p.date });
 
 // ── Map Supabase rows back to JS objects ──
-const fromProductRow  = r => ({ id:r.id, brand:r.brand, model:r.model, color:r.color, storage:r.storage, imei:r.imei, currency:r.currency, cost:r.cost, price:r.price, supplier:r.supplier, status:r.status, notes:r.notes, date:r.date, purchaseId:r.purchase_id, productSnapshot:r.product_snapshot, imageUrl:r.image_url||null });
+const fromProductRow  = r => ({ id:r.id, brand:r.brand, model:r.model, color:r.color, storage:r.storage, imei:r.imei, currency:r.currency, cost:r.cost, price:r.price, supplier:r.supplier, status:r.status, notes:r.notes, date:r.date, purchaseId:r.purchase_id, productSnapshot:r.product_snapshot, imageUrl:r.image_url||null, category:r.category||'Celular' });
 const fromSaleRow     = r => ({ id:r.id, productId:r.product_id, client:r.client, phone:r.phone, payment:r.payment, currency:r.currency, price:r.price, invoice:r.invoice, notes:r.notes, date:r.date, waNotified:r.wa_notified, cobrado:r.cobrado, productSnapshot:r.product_snapshot });
 const fromPurchaseRow = r => ({ id:r.id, brand:r.brand, model:r.model, storage:r.storage, qty:r.qty, currency:r.currency, cost:r.cost, price:r.price, supplier:r.supplier, notes:r.notes, date:r.date });
 
@@ -1178,6 +1222,7 @@ function openAddProduct() {
   document.getElementById('product-modal-title').textContent = 'Agregar Equipo';
   document.getElementById('product-id').value = '';
   ['p-brand','p-model','p-color','p-storage','p-imei','p-cost','p-price','p-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('p-category').value = 'Celular';
   clearPhoto();
   document.getElementById('p-supplier').value = 'Proveedor Principal (+50581108843)';
   setPCur('C$');
@@ -1198,6 +1243,7 @@ async function saveProduct() {
     currency: pCurrency,
     cost: parseFloat(document.getElementById('p-cost').value) || 0,
     price: parseFloat(document.getElementById('p-price').value) || 0,
+    category: document.getElementById('p-category').value || 'Celular',
     supplier: document.getElementById('p-supplier').value.trim(),
     notes: document.getElementById('p-notes').value.trim(),
   };
@@ -1235,13 +1281,18 @@ function filterInventory(f, el) {
 }
 
 function renderInventory() {
-  const q = document.getElementById('inv-search').value.toLowerCase();
+  const q    = document.getElementById('inv-search').value.toLowerCase();
+  const cat  = document.getElementById('inv-category')?.value || '';
+  const srt  = document.getElementById('inv-price-sort')?.value || '';
   let products = db.products.filter(p => {
-    const match = (p.brand+' '+p.model+' '+(p.color||'')).toLowerCase().includes(q);
-    if (invFilter === 'disponible') return match && p.status === 'disponible';
-    if (invFilter === 'vendido') return match && p.status === 'vendido';
-    return match;
+    const match = (p.brand+' '+p.model+' '+(p.color||'')+' '+(p.category||'')).toLowerCase().includes(q);
+    const matchCat = !cat || (p.category||'Celular') === cat;
+    if (invFilter === 'disponible') return match && matchCat && p.status === 'disponible';
+    if (invFilter === 'vendido')    return match && matchCat && p.status === 'vendido';
+    return match && matchCat;
   });
+  if (srt === 'asc')  products.sort((a,b) => (a.price||0)-(b.price||0));
+  if (srt === 'desc') products.sort((a,b) => (b.price||0)-(a.price||0));
   const el = document.getElementById('inventory-list');
   if (!products.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><p>No hay equipos</p></div>'; return; }
   el.innerHTML = products.map(p => {
@@ -1251,7 +1302,7 @@ function renderInventory() {
       <div class="item-icon" style="background:${bg};overflow:hidden;padding:0">${p.imageUrl ? `<img src="${p.imageUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:10px">` : '📱'}</div>
       <div class="item-info">
         <div class="item-name">${p.brand} ${p.model}</div>
-        <div class="item-sub">${[p.storage,p.color].filter(Boolean).join(' · ')}</div>
+        <div class="item-sub">${p.category||'Celular'} · ${[p.storage,p.color].filter(Boolean).join(' · ')||'—'}</div>
       </div>
       <div class="item-right">
         <div class="item-price">${fmt(p.price, p.currency)}</div>
@@ -1269,6 +1320,7 @@ function openProductDetail(id) {
   const profit = p.price - p.cost;
   document.getElementById('product-detail-content').innerHTML = `
     ${p.imageUrl ? `<div style="text-align:center;margin-bottom:14px;border-radius:12px;overflow:hidden;max-height:220px;background:var(--surface2)"><img src="${p.imageUrl}" style="max-width:100%;max-height:220px;object-fit:contain"></div>` : ''}
+    <div class="detail-row"><span class="detail-key">Categoría</span><span class="detail-val">${p.category||'Celular'}</span></div>
     <div class="detail-row"><span class="detail-key">Marca / Modelo</span><span class="detail-val">${p.brand} ${p.model}</span></div>
     <div class="detail-row"><span class="detail-key">Color</span><span class="detail-val">${p.color||'—'}</span></div>
     <div class="detail-row"><span class="detail-key">Almacenamiento</span><span class="detail-val">${p.storage||'—'}</span></div>
@@ -1308,6 +1360,7 @@ function editProductFromDetail() {
   document.getElementById('p-price').value = p.price;
   document.getElementById('p-supplier').value = p.supplier||'';
   document.getElementById('p-notes').value = p.notes||'';
+  document.getElementById('p-category').value = p.category||'Celular';
   setPCur(p.currency||'C$');
   // Load existing photo if any
   if (p.imageUrl) {
@@ -1582,6 +1635,7 @@ function openAddPurchase() {
   document.getElementById('pu-cost').value = '';
   document.getElementById('pu-price').value = '';
   document.getElementById('pu-supplier').value = 'Proveedor Principal (+50581108843)';
+  document.getElementById('pu-category').value = 'Celular';
   setPUCur('C$');
   populateBrandDatalist();
   openModal('modal-purchase');
@@ -1594,7 +1648,8 @@ function savePurchase() {
   if (!brand || !model) { toast('⚠️ Marca y modelo son requeridos'); return; }
   const cost = parseFloat(document.getElementById('pu-cost').value) || 0;
   const price = parseFloat(document.getElementById('pu-price').value) || 0;
-  const storage = document.getElementById('pu-storage').value.trim();
+  const storage  = document.getElementById('pu-storage').value.trim();
+  const category = document.getElementById('pu-category').value || 'Celular';
   const supplier = document.getElementById('pu-supplier').value.trim();
   const notes = document.getElementById('pu-notes').value.trim();
   const purchaseId = 'pu' + Date.now();
@@ -1604,7 +1659,7 @@ function savePurchase() {
   for (let i = 0; i < qty; i++) {
     db.products.push({
       id: uid(),
-      brand, model, storage, color: '',
+      brand, model, storage, color: '', category,
       currency: puCurrency, cost, price, supplier, notes,
       status: 'disponible',
       date: new Date().toISOString(),
