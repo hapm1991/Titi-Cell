@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Titi Cell">
 <meta name="theme-color" content="#0a0a0f">
 <title>Titi Cell</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.19.1/zxing.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
 <style>
@@ -289,8 +289,9 @@
   }
   #scanner-modal.open { display: flex; }
   #scanner-video {
-    width: 100%; flex: 1; object-fit: cover;
+    width: 100%; flex: 1; overflow: hidden; position: relative;
   }
+  #scanner-video video, #scanner-video canvas { width: 100% !important; height: 100% !important; object-fit: cover; position: absolute; top: 0; left: 0; }
   #scanner-overlay {
     position: absolute; inset: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -534,7 +535,7 @@
 
 <!-- SCANNER MODAL -->
 <div id="scanner-modal">
-  <video id="scanner-video" autoplay playsinline muted></video>
+  <div id="scanner-video" style="width:100%;flex:1;overflow:hidden;position:relative"></div>
   <div id="scanner-overlay">
     <div id="scanner-frame">
       <div class="scanner-line"></div>
@@ -1847,42 +1848,56 @@ window.addEventListener('beforeunload', e => {
   e.returnValue = '';
 });
 
-// ===================== BARCODE SCANNER =====================
+// ===================== BARCODE SCANNER (QuaggaJS) =====================
 let scannerTargetId = null;
-let codeReader = null;
 let scannerStream = null;
+let quaggaRunning = false;
 
 async function openScanner(targetInputId) {
   scannerTargetId = targetInputId;
-  document.getElementById('scanner-result').style.display = 'none';
-  document.getElementById('scanner-result').textContent = '';
+  const resEl = document.getElementById('scanner-result');
+  resEl.style.display = 'none';
+  resEl.textContent = '';
+  resEl.style.background = 'var(--accent3)';
   document.getElementById('scanner-hint').textContent = 'Apunta al código de barras del IMEI';
   document.getElementById('scanner-modal').classList.add('open');
 
-  try {
-    // Request camera
-    scannerStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    const video = document.getElementById('scanner-video');
-    video.srcObject = scannerStream;
-    await video.play();
+  if (typeof Quagga === 'undefined') {
+    document.getElementById('scanner-hint').textContent = '⚠️ Escáner no disponible. Ingresa el IMEI manualmente.';
+    return;
+  }
 
-    // Start decoding
-    if (typeof ZXing !== 'undefined') {
-      codeReader = new ZXing.BrowserMultiFormatReader();
-      codeReader.decodeFromVideoElement(video, (result, err) => {
-        if (result) {
-          const text = result.getText();
-          onScanSuccess(text);
+  try {
+    Quagga.init({
+      inputStream: {
+        name: 'Live',
+        type: 'LiveStream',
+        target: document.getElementById('scanner-video'),
+        constraints: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         }
-      });
-    } else {
-      // Fallback: manual input hint
-      document.getElementById('scanner-hint').textContent = 'Escáner no disponible. Ingresa el IMEI manualmente.';
-    }
+      },
+      decoder: {
+        readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader']
+      },
+      locate: true
+    }, function(err) {
+      if (err) {
+        document.getElementById('scanner-hint').textContent = '⚠️ No se pudo acceder a la cámara. Ve a Ajustes → Safari → Cámara → Permitir.';
+        return;
+      }
+      Quagga.start();
+      quaggaRunning = true;
+    });
+
+    Quagga.onDetected(function(result) {
+      const code = result.codeResult.code;
+      if (code) onScanSuccess(code);
+    });
   } catch(e) {
-    document.getElementById('scanner-hint').textContent = '⚠️ No se pudo acceder a la cámara. Verifica los permisos en Ajustes → Safari.';
+    document.getElementById('scanner-hint').textContent = '⚠️ No se pudo iniciar el escáner.';
   }
 }
 
@@ -1947,7 +1962,10 @@ function onScanSuccess(text) {
 
 function closeScanner() {
   document.getElementById('scanner-modal').classList.remove('open');
-  if (codeReader) { try { codeReader.reset(); } catch(e){} codeReader = null; }
+  if (quaggaRunning) {
+    try { Quagga.offDetected(); Quagga.stop(); } catch(e) {}
+    quaggaRunning = false;
+  }
   if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
 }
 // Stop camera if user navigates away
